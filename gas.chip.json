@@ -5,7 +5,14 @@
   "pins": [
     "VCC",
     "GND",
-    "OUT"
+    "",
+    "",
+    "",
+    "OUT",
+    "OUT2",
+    "OUT3",
+    "OUT4",
+    "OUT5"
   ],
   "c": "gas.chip.c",
   "controls": [
