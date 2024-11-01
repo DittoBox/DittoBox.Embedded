@@ -14,8 +14,12 @@
 #define LED_ROJO 17
 #define LED_AMARILLO 16
 
-// Gas sensor pin
-#define GAS_SENSOR_PIN 34
+// Gas sensor pins
+#define GAS_OXYGEN_PIN 34
+#define GAS_CO2_PIN 35
+#define GAS_ETHYLENE_PIN 36
+#define GAS_AMMONIA_PIN 39
+#define GAS_SO2_PIN 32
 
 // WiFi Credentials
 #define WIFI_SSID "Wokwi-GUEST"
@@ -102,7 +106,11 @@ void loop() {
     // DHT22 sensor reading
     float h = dht.readHumidity();
     float t = dht.readTemperature();
-    int gasValue = analogRead(GAS_SENSOR_PIN);
+    int gasOxygen = analogRead(GAS_OXYGEN_PIN);
+    int gasCO2 = analogRead(GAS_CO2_PIN);
+    int gasEthylene = analogRead(GAS_ETHYLENE_PIN);
+    int gasAmmonia = analogRead(GAS_AMMONIA_PIN);
+    int gasSO2 = analogRead(GAS_SO2_PIN);
 
     // We check if the readings are valid
     if (isnan(h) || isnan(t)) {
@@ -120,13 +128,21 @@ void loop() {
     Serial.print("Humedad: ");
     Serial.print(h);
     Serial.print(" % ");
-    Serial.print("Gas: ");
-    Serial.println(gasValue);
+    Serial.print("Oxygen: ");
+    Serial.print(gasOxygen);
+    Serial.print(" CO2: ");
+    Serial.print(gasCO2);
+    Serial.print(" Ethylene: ");
+    Serial.print(gasEthylene);
+    Serial.print(" Ammonia: ");
+    Serial.print(gasAmmonia);
+    Serial.print(" SO2: ");
+    Serial.println(gasSO2);
 
     // LEDs and LCD display
     int gasThreshold = 2500;
 
-    if (gasValue >= gasThreshold) {
+    if (gasOxygen >= gasThreshold || gasCO2 >= gasThreshold || gasEthylene >= gasThreshold || gasAmmonia >= gasThreshold || gasSO2 >= gasThreshold) {
       // The input is in poor condition
       digitalWrite(LED_AMARILLO, HIGH);
       digitalWrite(LED_VERDE, LOW);
@@ -158,11 +174,15 @@ void loop() {
     }
 
     // Send data to REST API
-    JsonDocument dataRecord;
+    StaticJsonDocument<200> dataRecord;
     dataRecord["deviceId"] = DEVICE_ID;
     dataRecord["temperature"] = t;
     dataRecord["humidity"] = h;
-    dataRecord["gasValue"] = gasValue;
+    dataRecord["gasOxygen"] = gasOxygen;
+    dataRecord["gasCO2"] = gasCO2;
+    dataRecord["gasEthylene"] = gasEthylene;
+    dataRecord["gasAmmonia"] = gasAmmonia;
+    dataRecord["gasSO2"] = gasSO2;
 
     String dataRecordResource;
     serializeJson(dataRecord, dataRecordResource);
@@ -175,7 +195,7 @@ void loop() {
     // Check Response
     if (httpResponseCode > 0) {
       String responseResource = httpClient.getString();
-      JsonDocument response;
+      StaticJsonDocument<200> response;
       deserializeJson(response, responseResource);
       serializeJsonPretty(response, Serial);
     } else {
