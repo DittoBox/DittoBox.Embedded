@@ -1,6 +1,9 @@
 #include <Wire.h>
 #include <LiquidCrystal_I2C.h>
 #include "DHT.h"
+#include <ArduinoJson.h>
+#include <HTTPClient.h>
+#include <WiFi.h>
 
 #define DHTPIN 15
 #define DHTTYPE DHT22
@@ -14,6 +17,22 @@
 // Gas sensor pin
 #define GAS_SENSOR_PIN 34
 
+// WiFi Credentials
+#define WIFI_SSID "Wokwi-GUEST"
+#define WIFI_PASSWORD ""
+
+// Fake Edge API URL
+#define ENDPOINT_URL "https://iot-edge-sample-20211d744.free.beeceptor.com/api/v1/data-records"
+
+// HTTP Client
+HTTPClient httpClient;
+
+// HTTP Header Parameters
+#define CONTENT_TYPE_HEADER "Content-Type"
+#define APPLICATION_JSON "application/json"
+
+#define DEVICE_ID "HC001"
+
 DHT dht(DHTPIN, DHTTYPE);
 LiquidCrystal_I2C lcd(0x27, 16, 2);
 
@@ -22,7 +41,21 @@ const long interval = 250;  // Flicker interval in milliseconds
 bool ledAzulState = false;
 
 void setup() {
+  // Serial Output initialization
   Serial.begin(115200);
+
+  // WiFi Setup
+  WiFi.mode(WIFI_STA);
+  WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
+  Serial.print("connecting");
+  while(WiFi.status() != WL_CONNECTED){
+    Serial.print(".");
+    delay(500);
+  }
+  Serial.println();
+  Serial.print("connected: ");
+  Serial.println(WiFi.localIP());
+
   dht.begin();
   lcd.init();
   lcd.backlight();
@@ -124,6 +157,35 @@ void loop() {
     lcd.print((int)h);
     lcd.print("%");
   }
+
+  // Send data to REST API
+  JsonDocument dataRecord;
+  dataRecord["deviceId"] = DEVICE_ID;
+  dataRecord["temperature"] = t;
+  dataRecord["humidity"] = h;
+  dataRecord["gasValue"] = gasValue;
+
+  String dataRecordResource;
+  serializeJson(dataRecord, dataRecordResource);
+  httpClient.begin(ENDPOINT_URL);
+  httpClient.addHeader(CONTENT_TYPE_HEADER, APPLICATION_JSON);
+
+  // Make HTTP POST Request
+  int httpResponseCode = httpClient.POST(dataRecordResource);
+
+  // Check Response
+  if (httpResponseCode > 0) {
+    String responseResource = httpClient.getString();
+    JsonDocument response;
+    deserializeJson(response, responseResource);
+    serializeJsonPretty(response, Serial);
+  } else {
+    Serial.print("Error on sending POST: ");
+    Serial.println(httpResponseCode);
+  }
+
+  // Close Request session
+  httpClient.end();
 
   delay(500);
 }
