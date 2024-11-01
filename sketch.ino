@@ -37,7 +37,7 @@ DHT dht(DHTPIN, DHTTYPE);
 LiquidCrystal_I2C lcd(0x27, 16, 2);
 
 unsigned long previousMillis = 0;
-const long interval = 250;  // Flicker interval in milliseconds
+const long interval = 60000;  // Interval of 1 minute
 bool ledAzulState = false;
 
 void setup() {
@@ -98,94 +98,92 @@ void loop() {
     previousMillis = currentMillis;
     ledAzulState = !ledAzulState;
     digitalWrite(LED_AZUL, ledAzulState);
+
+    // DHT22 sensor reading
+    float h = dht.readHumidity();
+    float t = dht.readTemperature();
+    int gasValue = analogRead(GAS_SENSOR_PIN);
+
+    // We check if the readings are valid
+    if (isnan(h) || isnan(t)) {
+      Serial.println("Error al leer del sensor DHT!");
+      digitalWrite(LED_ROJO, HIGH);
+      digitalWrite(LED_VERDE, LOW);
+      digitalWrite(LED_AMARILLO, LOW);
+      return;
+    }
+
+    // Display on the serial monitor
+    Serial.print("Temperatura: ");
+    Serial.print(t);
+    Serial.print(" °C ");
+    Serial.print("Humedad: ");
+    Serial.print(h);
+    Serial.print(" % ");
+    Serial.print("Gas: ");
+    Serial.println(gasValue);
+
+    // LEDs and LCD display
+    int gasThreshold = 2500;
+
+    if (gasValue >= gasThreshold) {
+      // The input is in poor condition
+      digitalWrite(LED_AMARILLO, HIGH);
+      digitalWrite(LED_VERDE, LOW);
+      digitalWrite(LED_ROJO, LOW);
+
+      // Display alert message on LCD
+      lcd.clear();
+      lcd.setCursor(0, 0);
+      lcd.print("Manzana en mal");
+      lcd.setCursor(0, 1);
+      lcd.print("estado!");
+    } else {
+      // The input is in good condition
+      digitalWrite(LED_VERDE, HIGH);
+      digitalWrite(LED_AMARILLO, LOW);
+      digitalWrite(LED_ROJO, LOW);
+
+      // Display normal data on the LCD
+      lcd.clear();
+      lcd.setCursor(0, 0);
+      lcd.print("Manzana");
+      lcd.setCursor(0, 1);
+      lcd.print("T:");
+      lcd.print((int)t);
+      lcd.print((char)223);
+      lcd.print("C H:");
+      lcd.print((int)h);
+      lcd.print("%");
+    }
+
+    // Send data to REST API
+    JsonDocument dataRecord;
+    dataRecord["deviceId"] = DEVICE_ID;
+    dataRecord["temperature"] = t;
+    dataRecord["humidity"] = h;
+    dataRecord["gasValue"] = gasValue;
+
+    String dataRecordResource;
+    serializeJson(dataRecord, dataRecordResource);
+    httpClient.begin(ENDPOINT_URL);
+    httpClient.addHeader(CONTENT_TYPE_HEADER, APPLICATION_JSON);
+
+    // Make HTTP POST Request
+    int httpResponseCode = httpClient.POST(dataRecordResource);
+
+    // Check Response
+    if (httpResponseCode > 0) {
+      String responseResource = httpClient.getString();
+      JsonDocument response;
+      deserializeJson(response, responseResource);
+      serializeJsonPretty(response, Serial);
+    } else {
+      Serial.print("Error on sending POST: ");
+      Serial.println(httpResponseCode);
+    }
+
+    // Close Request session
+    httpClient.end();
   }
-
-  // DHT22 sensor reading
-  float h = dht.readHumidity();
-  float t = dht.readTemperature();
-  int gasValue = analogRead(GAS_SENSOR_PIN);
-
-  // We check if the readings are valid
-  if (isnan(h) || isnan(t)) {
-    Serial.println("Error al leer del sensor DHT!");
-    digitalWrite(LED_ROJO, HIGH);
-    digitalWrite(LED_VERDE, LOW);
-    digitalWrite(LED_AMARILLO, LOW);
-    return;
-  }
-
-  // Display on the serial monitor
-  Serial.print("Temperatura: ");
-  Serial.print(t);
-  Serial.print(" °C ");
-  Serial.print("Humedad: ");
-  Serial.print(h);
-  Serial.print(" % ");
-  Serial.print("Gas: ");
-  Serial.println(gasValue);
-
-  // LEDs and LCD display
-  int gasThreshold = 2500;
-
-  if (gasValue >= gasThreshold) {
-    // The input is in poor condition
-    digitalWrite(LED_AMARILLO, HIGH);
-    digitalWrite(LED_VERDE, LOW);
-    digitalWrite(LED_ROJO, LOW);
-
-    // Display alert message on LCD
-    lcd.clear();
-    lcd.setCursor(0, 0);
-    lcd.print("Manzana en mal");
-    lcd.setCursor(0, 1);
-    lcd.print("estado!");
-  } else {
-    // The input is in good condition
-    digitalWrite(LED_VERDE, HIGH);
-    digitalWrite(LED_AMARILLO, LOW);
-    digitalWrite(LED_ROJO, LOW);
-
-    // Display normal data on the LCD
-    lcd.clear();
-    lcd.setCursor(0, 0);
-    lcd.print("Manzana");
-    lcd.setCursor(0, 1);
-    lcd.print("T:");
-    lcd.print((int)t);
-    lcd.print((char)223);
-    lcd.print("C H:");
-    lcd.print((int)h);
-    lcd.print("%");
-  }
-
-  // Send data to REST API
-  JsonDocument dataRecord;
-  dataRecord["deviceId"] = DEVICE_ID;
-  dataRecord["temperature"] = t;
-  dataRecord["humidity"] = h;
-  dataRecord["gasValue"] = gasValue;
-
-  String dataRecordResource;
-  serializeJson(dataRecord, dataRecordResource);
-  httpClient.begin(ENDPOINT_URL);
-  httpClient.addHeader(CONTENT_TYPE_HEADER, APPLICATION_JSON);
-
-  // Make HTTP POST Request
-  int httpResponseCode = httpClient.POST(dataRecordResource);
-
-  // Check Response
-  if (httpResponseCode > 0) {
-    String responseResource = httpClient.getString();
-    JsonDocument response;
-    deserializeJson(response, responseResource);
-    serializeJsonPretty(response, Serial);
-  } else {
-    Serial.print("Error on sending POST: ");
-    Serial.println(httpResponseCode);
-  }
-
-  // Close Request session
-  httpClient.end();
-
-  delay(500);
 }
