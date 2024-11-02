@@ -14,8 +14,12 @@
 #define LED_ROJO 17
 #define LED_AMARILLO 16
 
-// Gas sensor pin
-#define GAS_SENSOR_PIN 34
+// Gas sensor pins
+#define GAS_OXYGEN_PIN 34 ///good
+#define GAS_CO2_PIN 35 //good
+#define GAS_ETHYLENE_PIN 32
+#define GAS_AMMONIA_PIN 33
+#define GAS_SO2_PIN 35
 
 // WiFi Credentials
 #define WIFI_SSID "Wokwi-GUEST"
@@ -102,7 +106,18 @@ void loop() {
     // DHT22 sensor reading
     float h = dht.readHumidity();
     float t = dht.readTemperature();
-    int gasValue = analogRead(GAS_SENSOR_PIN);
+    int gasOxygen = analogRead(GAS_OXYGEN_PIN);
+    int gasCO2 = analogRead(GAS_CO2_PIN);
+    int gasEthylene = analogRead(GAS_ETHYLENE_PIN);
+    int gasAmmonia = analogRead(GAS_AMMONIA_PIN);
+    int gasSO2 = analogRead(GAS_SO2_PIN);
+
+    // Convert gas sensor readings to percentage (0-100%)
+    float gasOxygenPercent = (gasOxygen / 4095.0) * 100;
+    float gasCO2Percent = (gasCO2 / 4095.0) * 100;
+    float gasEthylenePercent = (gasEthylene / 4095.0) * 100;
+    float gasAmmoniaPercent = (gasAmmonia / 4095.0) * 100;
+    float gasSO2Percent = (gasSO2 / 4095.0) * 100;
 
     // We check if the readings are valid
     if (isnan(h) || isnan(t)) {
@@ -120,13 +135,21 @@ void loop() {
     Serial.print("Humedad: ");
     Serial.print(h);
     Serial.print(" % ");
-    Serial.print("Gas: ");
-    Serial.println(gasValue);
+    Serial.print("Oxygen: ");
+    Serial.print(gasOxygenPercent);
+    Serial.print(" % CO2: ");
+    Serial.print(gasCO2Percent);
+    Serial.print(" % Ethylene: ");
+    Serial.print(gasEthylenePercent);
+    Serial.print(" % Ammonia: ");
+    Serial.print(gasAmmoniaPercent);
+    Serial.print(" % SO2: ");
+    Serial.println(gasSO2Percent);
 
     // LEDs and LCD display
-    int gasThreshold = 2500;
+    int gasThreshold = 60; // Adjusted threshold for percentage
 
-    if (gasValue >= gasThreshold) {
+    if (gasOxygenPercent >= gasThreshold || gasCO2Percent >= gasThreshold || gasEthylenePercent >= gasThreshold || gasAmmoniaPercent >= gasThreshold || gasSO2Percent >= gasThreshold) {
       // The input is in poor condition
       digitalWrite(LED_AMARILLO, HIGH);
       digitalWrite(LED_VERDE, LOW);
@@ -158,11 +181,15 @@ void loop() {
     }
 
     // Send data to REST API
-    JsonDocument dataRecord;
+    StaticJsonDocument<200> dataRecord;
     dataRecord["deviceId"] = DEVICE_ID;
     dataRecord["temperature"] = t;
     dataRecord["humidity"] = h;
-    dataRecord["gasValue"] = gasValue;
+    dataRecord["gasOxygen"] = gasOxygenPercent;
+    dataRecord["gasCO2"] = gasCO2Percent;
+    dataRecord["gasEthylene"] = gasEthylenePercent;
+    dataRecord["gasAmmonia"] = gasAmmoniaPercent;
+    dataRecord["gasSO2"] = gasSO2Percent;
 
     String dataRecordResource;
     serializeJson(dataRecord, dataRecordResource);
@@ -175,7 +202,7 @@ void loop() {
     // Check Response
     if (httpResponseCode > 0) {
       String responseResource = httpClient.getString();
-      JsonDocument response;
+      StaticJsonDocument<200> response;
       deserializeJson(response, responseResource);
       serializeJsonPretty(response, Serial);
     } else {
