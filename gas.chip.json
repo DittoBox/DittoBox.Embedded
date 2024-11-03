@@ -3,19 +3,19 @@
   "version": "1.0.0",
   "author": "Samuel Chamorro",
   "pins": [
-    "VCC", // Pin for sensor power supply
-    "GND", // Ground connection pin
-    "", // Reserved or currently unused pins
+    "VCC", //Pin for sensor power supply
+    "GND", //Ground connection pin
+    "", //Reserved or currently unused pins
     "",
     "",
-    "OUT", // Output pins providing sensor readings
+    "OUT", //Output pins providing sensor readings
     "OUT2",
     "OUT3",
     "OUT4",
     "OUT5"
   ],
   
-  // General list of sensor pins, including power supply, ground, and multiple output pins for different gas readings.
+  //General list of sensor pins, including power supply, ground, and multiple output pins for different gas readings.
 
   "c": "gas.chip.c",
   "controls": [
@@ -60,7 +60,7 @@
       "step": 1
     }
   ],
-// General configuration for controls representing the different gases detected by the sensor.
-// Each control defines a specific gas parameter with a unique ID, a descriptive label, and 
-// configuration values including range (min and max) and step for adjustments.
+//General configuration for controls representing the different gases detected by the sensor.
+//Each control defines a specific gas parameter with a unique ID, a descriptive label, and 
+//configuration values including range (min and max) and step for adjustments.
 }
