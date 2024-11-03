@@ -81,7 +81,11 @@
     [ "led3:C", "esp:GND.3", "green", [ "v9.6", "h-172.4", "v-134.4" ] ],
     [ "chip1:VCC", "esp:3V3", "red", [ "h0", "v-48" ] ],
     [ "chip1:GND", "esp:GND.1", "black", [ "h0", "v48" ] ],
-    [ "chip1:OUT", "esp:34", "green", [ "v0", "h59.41", "v-19.2" ] ]
+    [ "chip1:OUT", "esp:34", "#8f4814", [ "v0", "h59.41", "v-19.2" ] ],
+    [ "chip1:OUT2", "esp:35", "orange", [ "v0", "h59.41", "v-19.2" ] ],
+    [ "chip1:OUT3", "esp:32", "cyan", [ "h49.81", "v-9.6" ] ],
+    [ "chip1:OUT4", "esp:33", "magenta", [ "h11.41", "v9.6" ] ],
+    [ "chip1:OUT5", "esp:35", "green", [ "h0" ] ]
   ],
   "dependencies": {}
 }

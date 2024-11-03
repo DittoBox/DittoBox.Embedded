@@ -1,6 +1,9 @@
 #include <Wire.h>
 #include <LiquidCrystal_I2C.h>
 #include "DHT.h"
+#include <ArduinoJson.h>
+#include <HTTPClient.h>
+#include <WiFi.h>
 
 #define DHTPIN 15
 #define DHTTYPE DHT22
@@ -13,27 +16,46 @@
 #define LED_ROJO 17
 #define LED_AMARILLO 16
 
-// Gas sensor pin
-#define GAS_SENSOR_PIN 34
+// Gas sensor pins
+#define GAS_OXYGEN_PIN 34
+#define GAS_CO2_PIN 35
+#define GAS_ETHYLENE_PIN 32
+#define GAS_AMMONIA_PIN 33
+#define GAS_SO2_PIN 35
+
+// WiFi Credentials
+#define WIFI_SSID "Wokwi-GUEST"
+#define WIFI_PASSWORD ""
+
+// Fake Edge API URL
+#define ENDPOINT_URL "https://iot-edge-sample-20211d744.free.beeceptor.com/api/v1/data-records"
+
+// HTTP Client
+HTTPClient httpClient;
+
+// HTTP Header Parameters
+#define CONTENT_TYPE_HEADER "Content-Type"
+#define APPLICATION_JSON "application/json"
+
+#define DEVICE_ID "HC001"
 
 struct HealthMonitor
 {
-	int FAILING_RATE_PERIOD_CYCLES; // period in cycles for relative failing rate
-	int FAILURES_SINCE_STARTUP;		// number of failures since startup
-	int REMAINING_CYCLES;			// remaining cycles until next check
-	int FAILURES_SINCE_LAST_CHECK;	// number of failures since last check
-	int REQUESTS_SINCE_LAST_CHECK;	// number of requests since last check
-	int REQUESTS_SINCE_STARTUP;		// number of requests since startup
-	int FAILING_RATE;				// failing rate in the last period
-	void (*reset)(struct HealthMonitor *);
+    int FAILING_RATE_PERIOD_CYCLES; // period in cycles for relative failing rate
+    int FAILURES_SINCE_STARTUP;     // number of failures since startup
+    int REMAINING_CYCLES;           // remaining cycles until next check
+    int FAILURES_SINCE_LAST_CHECK;  // number of failures since last check
+    int REQUESTS_SINCE_LAST_CHECK;  // number of requests since last check
+    int REQUESTS_SINCE_STARTUP;     // number of requests since startup
+    int FAILING_RATE;               // failing rate in the last period
+    void (*reset)(struct HealthMonitor *);
 };
 
 DHT dht(DHTPIN, DHTTYPE);
 LiquidCrystal_I2C lcd(0x27, 16, 2);
 
 unsigned long previousMillis = 0;
-unsigned long previousHealthCheckMillis = 0;
-const long interval = 250; // Flicker interval in milliseconds
+const long interval = 60000;  // Interval of 1 minute
 bool ledAzulState = false;
 HealthMonitor gasHealthMonitor;
 HealthMonitor temperatureHealthMonitor;
@@ -41,187 +63,205 @@ HealthMonitor humidityHealthMonitor;
 
 void HealthMonitor_reset(struct HealthMonitor *healthMonitor)
 {
-	healthMonitor->REMAINING_CYCLES = healthMonitor->FAILING_RATE_PERIOD_CYCLES;
-	healthMonitor->FAILURES_SINCE_LAST_CHECK = 0;
-	healthMonitor->REQUESTS_SINCE_LAST_CHECK = 0;
+    healthMonitor->REMAINING_CYCLES = healthMonitor->FAILING_RATE_PERIOD_CYCLES;
+    healthMonitor->FAILURES_SINCE_LAST_CHECK = 0;
+    healthMonitor->REQUESTS_SINCE_LAST_CHECK = 0;
 }
 
 void initializeHealthMonitor(HealthMonitor *healthMonitor, int periodCycles)
 {
-	healthMonitor->FAILING_RATE_PERIOD_CYCLES = periodCycles;
-	healthMonitor->FAILURES_SINCE_STARTUP = 0;
-	healthMonitor->REMAINING_CYCLES = periodCycles;
-	healthMonitor->FAILURES_SINCE_LAST_CHECK = 0;
-	healthMonitor->REQUESTS_SINCE_LAST_CHECK = 0;
-	healthMonitor->FAILING_RATE = 0;
-	healthMonitor->reset = HealthMonitor_reset;
+    healthMonitor->FAILING_RATE_PERIOD_CYCLES = periodCycles;
+    healthMonitor->FAILURES_SINCE_STARTUP = 0;
+    healthMonitor->REMAINING_CYCLES = periodCycles;
+    healthMonitor->FAILURES_SINCE_LAST_CHECK = 0;
+    healthMonitor->REQUESTS_SINCE_LAST_CHECK = 0;
+    healthMonitor->FAILING_RATE = 0;
+    healthMonitor->reset = HealthMonitor_reset;
 }
 
 void setup()
 {
-	Serial.begin(115200);
-	dht.begin();
-	lcd.init();
-	lcd.backlight();
+    // Serial Output initialization
+    Serial.begin(115200);
 
-	// Configuration of the LED pins as outputs
-	pinMode(LED_AZUL, OUTPUT);
-	pinMode(LED_VERDE, OUTPUT);
-	pinMode(LED_ROJO, OUTPUT);
-	pinMode(LED_AMARILLO, OUTPUT);
+    // WiFi Setup
+    WiFi.mode(WIFI_STA);
+    WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
+    Serial.print("connecting");
+    while (WiFi.status() != WL_CONNECTED)
+    {
+        Serial.print(".");
+        delay(500);
+    }
+    Serial.println();
+    Serial.print("connected: ");
+    Serial.println(WiFi.localIP());
 
-	// LEDs are off at startup
-	digitalWrite(LED_AZUL, LOW);
-	digitalWrite(LED_VERDE, LOW);
-	digitalWrite(LED_ROJO, LOW);
-	digitalWrite(LED_AMARILLO, LOW);
+    dht.begin();
+    lcd.init();
+    lcd.backlight();
 
-	// Welcome messages on the LCD display
-	lcd.clear();
-	lcd.setCursor(3, 0);
-	lcd.print("Welcome");
-	delay(2000);
+    // Configuration of the LED pins as outputs
+    pinMode(LED_AZUL, OUTPUT);
+    pinMode(LED_VERDE, OUTPUT);
+    pinMode(LED_ROJO, OUTPUT);
+    pinMode(LED_AMARILLO, OUTPUT);
 
-	lcd.clear();
-	lcd.setCursor(2, 0);
-	lcd.print("DittoBox");
-	delay(2000);
+    // LEDs are off at startup
+    digitalWrite(LED_AZUL, LOW);
+    digitalWrite(LED_VERDE, LOW);
+    digitalWrite(LED_ROJO, LOW);
+    digitalWrite(LED_AMARILLO, LOW);
 
-	lcd.clear();
-	lcd.setCursor(3, 0);
-	lcd.print("Starting");
-	delay(2000);
+    // Welcome messages on the LCD display
+    lcd.clear();
+    lcd.setCursor(3, 0);
+    lcd.print("Welcome");
+    delay(2000);
 
-	lcd.clear();
+    lcd.clear();
+    lcd.setCursor(2, 0);
+    lcd.print("DittoBox");
+    delay(2000);
 
-	// Initialize health monitors
-	initializeHealthMonitor(&gasHealthMonitor, HEALTH_CHECK_PERIOD);
-	initializeHealthMonitor(&temperatureHealthMonitor, HEALTH_CHECK_PERIOD);
-	initializeHealthMonitor(&humidityHealthMonitor, HEALTH_CHECK_PERIOD);
-}
+    lcd.clear();
+    lcd.setCursor(3, 0);
+    lcd.print("Starting");
+    delay(2000);
 
-void printHealthStatus(HealthMonitor *healthMonitor, const char *monitorName)
-{
-	Serial.print(monitorName);
-	Serial.print(" - Failures since startup: ");
-	Serial.print(healthMonitor->FAILURES_SINCE_STARTUP);
-	Serial.print(", Failures since last check: ");
-	Serial.print(healthMonitor->FAILURES_SINCE_LAST_CHECK);
-	Serial.print(", Requests since last check: ");
-	Serial.print(healthMonitor->REQUESTS_SINCE_LAST_CHECK);
-	Serial.print(", Failing rate: ");
-	Serial.print(healthMonitor->FAILING_RATE);
-	Serial.println("%");
+    lcd.clear();
+
+    // Initialize health monitors
+    initializeHealthMonitor(&gasHealthMonitor, HEALTH_CHECK_PERIOD);
+    initializeHealthMonitor(&temperatureHealthMonitor, HEALTH_CHECK_PERIOD);
+    initializeHealthMonitor(&humidityHealthMonitor, HEALTH_CHECK_PERIOD);
 }
 
 void loop()
 {
-	unsigned long currentMillis = millis();
+    unsigned long currentMillis = millis();
 
-	if (currentMillis - previousMillis >= interval)
-	{
-		previousMillis = currentMillis;
-		ledAzulState = !ledAzulState;
-		digitalWrite(LED_AZUL, ledAzulState);
-	}
+    if (currentMillis - previousMillis >= interval)
+    {
+        previousMillis = currentMillis;
+        ledAzulState = !ledAzulState;
+        digitalWrite(LED_AZUL, ledAzulState);
 
-	// Check if the health check period is completed
-	if (currentMillis - previousHealthCheckMillis >= HEALTH_CHECK_PERIOD)
-	{
-		previousHealthCheckMillis = currentMillis;
+        // DHT22 sensor reading
+        float h = dht.readHumidity();
+        float t = dht.readTemperature();
+        int gasOxygen = analogRead(GAS_OXYGEN_PIN);
+        int gasCO2 = analogRead(GAS_CO2_PIN);
+        int gasEthylene = analogRead(GAS_ETHYLENE_PIN);
+        int gasAmmonia = analogRead(GAS_AMMONIA_PIN);
+        int gasSO2 = analogRead(GAS_SO2_PIN);
 
-		// Print health status for each monitor
-		printHealthStatus(&gasHealthMonitor, "Gas Monitor");
-		printHealthStatus(&temperatureHealthMonitor, "Temperature Monitor");
-		printHealthStatus(&humidityHealthMonitor, "Humidity Monitor");
+        // Convert gas sensor readings to percentage (0-100%)
+        float gasOxygenPercent = (gasOxygen / 4095.0) * 100;
+        float gasCO2Percent = (gasCO2 / 4095.0) * 100;
+        float gasEthylenePercent = (gasEthylene / 4095.0) * 100;
+        float gasAmmoniaPercent = (gasAmmonia / 4095.0) * 100;
+        float gasSO2Percent = (gasSO2 / 4095.0) * 100;
 
-		// Reset the health monitors for the next period
-		gasHealthMonitor.reset(&gasHealthMonitor);
-		temperatureHealthMonitor.reset(&temperatureHealthMonitor);
-		humidityHealthMonitor.reset(&humidityHealthMonitor);
-	}
+        // We check if the readings are valid
+        if (isnan(h) || isnan(t))
+        {
+            Serial.println("Error al leer del sensor DHT!");
+            digitalWrite(LED_ROJO, HIGH);
+            digitalWrite(LED_VERDE, LOW);
+            digitalWrite(LED_AMARILLO, LOW);
+            return;
+        }
 
-	// DHT22 sensor reading
-	float h = dht.readHumidity();
-	humidityHealthMonitor.REQUESTS_SINCE_STARTUP += 1;
-	float t = dht.readTemperature();
-	temperatureHealthMonitor.REQUESTS_SINCE_STARTUP += 1;
-	int gasValue = analogRead(GAS_SENSOR_PIN);
-	gasHealthMonitor.REQUESTS_SINCE_STARTUP += 1;
-	if (gasValue < 0 || gasValue > 4095)
-	{
-		gasHealthMonitor.FAILURES_SINCE_STARTUP += 1;
-		gasHealthMonitor.FAILURES_SINCE_LAST_CHECK += 1;
-	}
+        // Display on the serial monitor
+        Serial.print("Temperatura: ");
+        Serial.print(t);
+        Serial.print(" °C ");
+        Serial.print("Humedad: ");
+        Serial.print(h);
+        Serial.print(" % ");
+        Serial.print("Oxygen: ");
+        Serial.print(gasOxygenPercent);
+        Serial.print(" % CO2: ");
+        Serial.print(gasCO2Percent);
+        Serial.print(" % Ethylene: ");
+        Serial.print(gasEthylenePercent);
+        Serial.print(" % Ammonia: ");
+        Serial.print(gasAmmoniaPercent);
+        Serial.print(" % SO2: ");
+        Serial.println(gasSO2Percent);
 
-	// We check if the readings are valid
-	if (isnan(h) || isnan(t))
-	{
-		if (isnan(h))
-		{
-			humidityHealthMonitor.FAILURES_SINCE_STARTUP += 1;
-			humidityHealthMonitor.FAILURES_SINCE_LAST_CHECK += 1;
-		}
+        // LEDs and LCD display
+        int gasThreshold = 60; // Adjusted threshold for percentage
 
-		if (isnan(t))
-		{
-			temperatureHealthMonitor.FAILURES_SINCE_STARTUP += 1;
-			temperatureHealthMonitor.FAILURES_SINCE_LAST_CHECK += 1;
-		}
+        if (gasOxygenPercent >= gasThreshold || gasCO2Percent >= gasThreshold || gasEthylenePercent >= gasThreshold || gasAmmoniaPercent >= gasThreshold || gasSO2Percent >= gasThreshold)
+        {
+            // The input is in poor condition
+            digitalWrite(LED_AMARILLO, HIGH);
+            digitalWrite(LED_VERDE, LOW);
+            digitalWrite(LED_ROJO, LOW);
 
-		Serial.println("Error al leer del sensor DHT!");
-		digitalWrite(LED_ROJO, HIGH);
-		digitalWrite(LED_VERDE, LOW);
-		digitalWrite(LED_AMARILLO, LOW);
-		return;
-	}
+            // Display alert message on LCD
+            lcd.clear();
+            lcd.setCursor(0, 0);
+            lcd.print("Manzana en mal");
+            lcd.setCursor(0, 1);
+            lcd.print("estado!");
+        }
+        else
+        {
+            // The input is in good condition
+            digitalWrite(LED_VERDE, HIGH);
+            digitalWrite(LED_AMARILLO, LOW);
+            digitalWrite(LED_ROJO, LOW);
 
-	// Display on the serial monitor
-	Serial.print("Temperatura: ");
-	Serial.print(t);
-	Serial.print(" °C ");
-	Serial.print("Humedad: ");
-	Serial.print(h);
-	Serial.print(" % ");
-	Serial.print("Gas: ");
-	Serial.println(gasValue);
+            // Display normal data on the LCD
+            lcd.clear();
+            lcd.setCursor(0, 0);
+            lcd.print("Manzana");
+            lcd.setCursor(0, 1);
+            lcd.print("T:");
+            lcd.print((int)t);
+            lcd.print((char)223);
+            lcd.print("C H:");
+            lcd.print((int)h);
+            lcd.print("%");
+        }
 
-	// LEDs and LCD display
-	int gasThreshold = 2500;
+        // Send data to REST API
+        StaticJsonDocument<200> dataRecord;
+        dataRecord["deviceId"] = DEVICE_ID;
+        dataRecord["temperature"] = t;
+        dataRecord["humidity"] = h;
+        dataRecord["gasOxygen"] = gasOxygenPercent;
+        dataRecord["gasCO2"] = gasCO2Percent;
+        dataRecord["gasEthylene"] = gasEthylenePercent;
+        dataRecord["gasAmmonia"] = gasAmmoniaPercent;
+        dataRecord["gasSO2"] = gasSO2Percent;
 
-	if (gasValue >= gasThreshold)
-	{
-		// The input is in poor condition
-		digitalWrite(LED_AMARILLO, HIGH);
-		digitalWrite(LED_VERDE, LOW);
-		digitalWrite(LED_ROJO, LOW);
+        String dataRecordResource;
+        serializeJson(dataRecord, dataRecordResource);
+        httpClient.begin(ENDPOINT_URL);
+        httpClient.addHeader(CONTENT_TYPE_HEADER, APPLICATION_JSON);
 
-		// Display alert message on LCD
-		lcd.clear();
-		lcd.setCursor(0, 0);
-		lcd.print("Manzana en mal");
-		lcd.setCursor(0, 1);
-		lcd.print("estado!");
-	}
-	else
-	{
-		// The input is in good condition
-		digitalWrite(LED_VERDE, HIGH);
-		digitalWrite(LED_AMARILLO, LOW);
-		digitalWrite(LED_ROJO, LOW);
+        // Make HTTP POST Request
+        int httpResponseCode = httpClient.POST(dataRecordResource);
 
-		// Display normal data on the LCD
-		lcd.clear();
-		lcd.setCursor(0, 0);
-		lcd.print("Manzana");
-		lcd.setCursor(0, 1);
-		lcd.print("T:");
-		lcd.print((int)t);
-		lcd.print((char)223);
-		lcd.print("C H:");
-		lcd.print((int)h);
-		lcd.print("%");
-	}
+        // Check Response
+        if (httpResponseCode > 0)
+        {
+            String responseResource = httpClient.getString();
+            StaticJsonDocument<200> response;
+            deserializeJson(response, responseResource);
+            serializeJsonPretty(response, Serial);
+        }
+        else
+        {
+            Serial.print("Error on sending POST: ");
+            Serial.println(httpResponseCode);
+        }
 
-	delay(500);
+        // Close Request session
+        httpClient.end();
+    }
 }
