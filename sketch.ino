@@ -229,7 +229,7 @@ void loop()
         }
 
         // Send data to REST API
-        StaticJsonDocument<200> dataRecord;
+        StaticJsonDocument<300> dataRecord;
         dataRecord["deviceId"] = DEVICE_ID;
         dataRecord["temperature"] = t;
         dataRecord["humidity"] = h;
@@ -238,6 +238,39 @@ void loop()
         dataRecord["gasEthylene"] = gasEthylenePercent;
         dataRecord["gasAmmonia"] = gasAmmoniaPercent;
         dataRecord["gasSO2"] = gasSO2Percent;
+
+        // Añadir HealthMonitor para gases
+        StaticJsonDocument<100> gasHealth;
+        gasHealth["failingRatePeriodCycles"] = gasHealthMonitor.FAILING_RATE_PERIOD_CYCLES;
+        gasHealth["failuresSinceStartup"] = gasHealthMonitor.FAILURES_SINCE_STARTUP;
+        gasHealth["remainingCycles"] = gasHealthMonitor.REMAINING_CYCLES;
+        gasHealth["failuresSinceLastCheck"] = gasHealthMonitor.FAILURES_SINCE_LAST_CHECK;
+        gasHealth["requestsSinceLastCheck"] = gasHealthMonitor.REQUESTS_SINCE_LAST_CHECK;
+        gasHealth["requestsSinceStartup"] = gasHealthMonitor.REQUESTS_SINCE_STARTUP;
+        gasHealth["failingRate"] = gasHealthMonitor.FAILING_RATE;
+        dataRecord["gasHealthMonitor"] = gasHealth;
+
+        // Añadir HealthMonitor para temperatura
+        StaticJsonDocument<100> temperatureHealth;
+        temperatureHealth["failingRatePeriodCycles"] = temperatureHealthMonitor.FAILING_RATE_PERIOD_CYCLES;
+        temperatureHealth["failuresSinceStartup"] = temperatureHealthMonitor.FAILURES_SINCE_STARTUP;
+        temperatureHealth["remainingCycles"] = temperatureHealthMonitor.REMAINING_CYCLES;
+        temperatureHealth["failuresSinceLastCheck"] = temperatureHealthMonitor.FAILURES_SINCE_LAST_CHECK;
+        temperatureHealth["requestsSinceLastCheck"] = temperatureHealthMonitor.REQUESTS_SINCE_LAST_CHECK;
+        temperatureHealth["requestsSinceStartup"] = temperatureHealthMonitor.REQUESTS_SINCE_STARTUP;
+        temperatureHealth["failingRate"] = temperatureHealthMonitor.FAILING_RATE;
+        dataRecord["temperatureHealthMonitor"] = temperatureHealth;
+
+        // Añadir HealthMonitor para humedad
+        StaticJsonDocument<100> humidityHealth;
+        humidityHealth["failingRatePeriodCycles"] = humidityHealthMonitor.FAILING_RATE_PERIOD_CYCLES;
+        humidityHealth["failuresSinceStartup"] = humidityHealthMonitor.FAILURES_SINCE_STARTUP;
+        humidityHealth["remainingCycles"] = humidityHealthMonitor.REMAINING_CYCLES;
+        humidityHealth["failuresSinceLastCheck"] = humidityHealthMonitor.FAILURES_SINCE_LAST_CHECK;
+        humidityHealth["requestsSinceLastCheck"] = humidityHealthMonitor.REQUESTS_SINCE_LAST_CHECK;
+        humidityHealth["requestsSinceStartup"] = humidityHealthMonitor.REQUESTS_SINCE_STARTUP;
+        humidityHealth["failingRate"] = humidityHealthMonitor.FAILING_RATE;
+        dataRecord["humidityHealthMonitor"] = humidityHealth;
 
         String dataRecordResource;
         serializeJson(dataRecord, dataRecordResource);
