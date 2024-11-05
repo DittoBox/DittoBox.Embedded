@@ -204,9 +204,9 @@ void loop()
             // Display alert message on LCD
             lcd.clear();
             lcd.setCursor(0, 0);
-            lcd.print("Manzana en mal");
+            lcd.print("Apple");
             lcd.setCursor(0, 1);
-            lcd.print("estado!");
+            lcd.print("spoiled!");
         }
         else
         {
@@ -218,7 +218,7 @@ void loop()
             // Display normal data on the LCD
             lcd.clear();
             lcd.setCursor(0, 0);
-            lcd.print("Manzana");
+            lcd.print("Apple");
             lcd.setCursor(0, 1);
             lcd.print("T:");
             lcd.print((int)t);
