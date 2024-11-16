@@ -1,0 +1,13 @@
+[wokwi]
+version = 1
+firmware = 'build/DittoBox.Embedded.ino.bin'
+elf = 'build/DittoBox.Embedded.ino.elf'
+rfc2217ServerPort = 4000
+
+[[net.forward]]
+from = "localhost:8180"
+to = "target:80"
+
+[[chip]]
+name = 'gas_sensor'
+binary = 'chips/gas.chip.wasm'

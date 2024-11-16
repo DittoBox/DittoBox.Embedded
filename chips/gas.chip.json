@@ -1,0 +1,57 @@
+{
+  "name": "Gas Sensor",
+  "version": "1.0.0",
+  "author": "Samuel Chamorro",
+  "pins": [
+    "VCC", 
+    "GND",
+    "OUT", 
+    "OUT2",
+    "OUT3",
+    "OUT4",
+    "OUT5"
+  ],
+  "c": "gas.chip.c",
+  "controls": [
+    {
+      "id": "gas_oxygen",
+      "label": "Oxygen Level",
+      "type": "range",
+      "min": 0,
+      "max": 4095,
+      "step": 1
+    },
+    {
+      "id": "gas_co2",
+      "label": "CO2 Level",
+      "type": "range",
+      "min": 0,
+      "max": 4095,
+      "step": 1
+    },
+    {
+      "id": "gas_ethylene",
+      "label": "Ethylene Level",
+      "type": "range",
+      "min": 0,
+      "max": 4095,
+      "step": 1
+    },
+    {
+      "id": "gas_ammonia",
+      "label": "Ammonia Level",
+      "type": "range",
+      "min": 0,
+      "max": 4095,
+      "step": 1
+    },
+    {
+      "id": "gas_so2",
+      "label": "SO2 Level",
+      "type": "range",
+      "min": 0,
+      "max": 4095,
+      "step": 1
+    }
+  ]
+}
